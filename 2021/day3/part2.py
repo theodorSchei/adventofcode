@@ -1,6 +1,3 @@
-from typing import List
-
-
 file = open('2021/day3/input.txt', 'r')
 lines = file.readlines()
 
@@ -13,7 +10,7 @@ file.close()
 binariesCopy = binaries.copy()
 
 
-def findMostPopularBinary(binaries: List, index: int):
+def findMostPopularBinary(binaries, index: int):
 
 	numberOfOnes = 0
 
@@ -28,7 +25,7 @@ def findMostPopularBinary(binaries: List, index: int):
 		return '0'
 
 
-def findOxygenGeneratorRating(binaries: List):
+def findOxygenGeneratorRating(binaries):
 	
 	print(f'\n\n--------Oxygen--------')
 	
@@ -61,7 +58,7 @@ def findOxygenGeneratorRating(binaries: List):
 	return oxygenGeneratorRating
 
 
-def findCO2ScrubberRating(binaries: List):
+def findCO2ScrubberRating(binaries):
 	
 	print(f'\n\n--------CO2--------')
 	
