@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 
@@ -13,29 +14,29 @@ fn get_char_value(c: char) -> u32 {
     let ascii: u32 = c as u32;
     let value: u32;
 
-    if ascii < 95 { // Uppercase
+    if ascii < 95 {
+        // Uppercase
         value = ascii - 38
-    } else { // Lowercase
+    } else {
+        // Lowercase
         value = ascii - 96
     }
     value
 }
 
 fn part_1(lines: &Vec<&str>) {
-    let mut sum = 0;
+    let mut sum: u32 = 0;
     for i in 0..lines.len() {
         let len = lines[i].len();
-        let first = &lines[i][..len / 2];
-        let second = &lines[i][len / 2..];
 
-        'outer: for first_c in 0..first.len() {
-            for second_c in 0..second.len() {
-                if first.chars().nth(first_c).unwrap() == second.chars().nth(second_c).unwrap() {
-                    let matching_char = first.chars().nth(first_c).unwrap();
-                    sum += get_char_value(matching_char);
-                    break 'outer;
-                }
-            }
+        let a = &lines[i][..len / 2];
+        let b = &lines[i][len / 2..];
+
+        let a_set: HashSet<char> = a.chars().collect();
+        let b_set: HashSet<char> = b.chars().collect();
+        
+        if let Some(c) = a_set.intersection(&b_set).next() {
+            sum += get_char_value(*c);
         }
     }
 
@@ -45,22 +46,19 @@ fn part_1(lines: &Vec<&str>) {
 fn part_2(lines: &Vec<&str>) {
     let mut sum = 0;
     for i in (0..lines.len()).step_by(3) {
-        let group = &lines[i..i+3];
-        'outer:for first_i in 0..group[0].len() {
-            for second_i in 0..group[1].len() {
-                for third_i in 0..group[2].len() {
-                    let char_0 = group[0].chars().nth(first_i).unwrap();
-                    let char_1 = group[1].chars().nth(second_i).unwrap();
-                    let char_2 = group[2].chars().nth(third_i).unwrap();
-                    if char_0 == char_1 && char_1 == char_2 {
-                        sum += get_char_value(char_0);
-                        break 'outer;
-                    }
-                }
-            }
+        let group = &lines[i..i + 3];
+
+        let a_set: HashSet<char> = group[0].chars().collect();
+        let b_set: HashSet<char> = group[1].chars().collect();
+        let c_set: HashSet<char> = group[2].chars().collect();
+
+        let a_b: HashSet<char> = a_set.intersection(&b_set).cloned().collect();
+
+        if let Some(c) = a_b.intersection(&c_set).next() {
+            sum += get_char_value(*c);
         }
     }
-    
+
     println!("Part 2: {}", sum);
 }
 
