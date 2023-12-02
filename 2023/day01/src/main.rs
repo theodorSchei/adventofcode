@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn test_part_1() {
-        let result = part_2("example.txt");
+        let result = part_1("example.txt");
         assert_eq!(result, 142);
     }
 
