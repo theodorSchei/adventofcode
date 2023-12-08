@@ -32,17 +32,6 @@ impl Hand {
     fn from_str(input: &str) -> Hand {
         let mut parts = input.split_whitespace();
         let cards: Vec<char> = parts.next().unwrap().chars().collect();
-        // // Sort cards by value
-        // cards.sort_by(|a, b| {
-        //     let card_values = [
-        //         '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A',
-        //     ];
-        //     card_values
-        //         .iter()
-        //         .rev()
-        //         .position(|&c| c == *a)
-        //         .cmp(&card_values.iter().rev().position(|&c| c == *b))
-        // });
         let bid = parts.next().unwrap().parse::<u32>().unwrap();
         let hand_type = HandType::from_cards(&cards.clone());
         Hand {
@@ -54,6 +43,7 @@ impl Hand {
     // Function to map a card character to its value
     fn card_value(card: &char) -> u8 {
         match card {
+            'X' => 0, // 'X' is a joker
             '2' => 2,
             '3' => 3,
             '4' => 4,
@@ -72,9 +62,9 @@ impl Hand {
     }
 
     // Compare two hands
-    fn compare(&self, other: &Hand) -> Ordering {
+    fn cmp(&self, other: &Hand) -> Ordering {
         if self.hand_type != other.hand_type {
-            return self.hand_type.cmp(&other.hand_type);
+            self.hand_type.cmp(&other.hand_type)
         } else {
             for i in 0..5 {
                 let cmp = Hand::card_value(&self.cards[i]).cmp(&Hand::card_value(&other.cards[i]));
@@ -82,81 +72,8 @@ impl Hand {
                     return cmp;
                 }
             }
-            return Ordering::Equal;
+            Ordering::Equal
         }
-
-        // Separate key cards and kickers, and sort them
-        let (self_keys, self_kickers) = self.sorted_key_and_kickers();
-        let (other_keys, other_kickers) = other.sorted_key_and_kickers();
-
-        // Compare key cards first
-        for (self_key, other_key) in self_keys.iter().zip(other_keys.iter()) {
-            let cmp = self_key.cmp(other_key);
-            if cmp != Ordering::Equal {
-                return cmp;
-            }
-        }
-
-        // If key cards are equal, compare kickers
-        for (self_kicker, other_kicker) in self_kickers.iter().zip(other_kickers.iter()) {
-            let cmp = self_kicker.cmp(other_kicker);
-            if cmp != Ordering::Equal {
-                return cmp;
-            }
-        }
-
-        Ordering::Equal
-    }
-
-    // Function to sort and separate key cards and kickers
-    fn sorted_key_and_kickers(&self) -> (Vec<u8>, Vec<u8>) {
-        let mut freq_map = HashMap::new();
-
-        for card in &self.cards {
-            let card_val = Hand::card_value(card);
-            *freq_map.entry(card_val).or_insert(0) += 1;
-        }
-
-        let mut key_cards = Vec::new();
-        let mut kickers = Vec::new();
-
-        match self.hand_type {
-            HandType::FiveOfAKind => {
-                key_cards.extend(freq_map.keys());
-            }
-            HandType::FourOfAKind | HandType::FullHouse | HandType::ThreeOfAKind => {
-                for (&card, &freq) in &freq_map {
-                    if freq == 4
-                        || (self.hand_type == HandType::FullHouse && freq == 3)
-                        || (self.hand_type == HandType::ThreeOfAKind && freq == 3)
-                    {
-                        key_cards.push(card);
-                    } else {
-                        kickers.push(card);
-                    }
-                }
-            }
-            HandType::TwoPair | HandType::OnePair => {
-                let mut pairs = Vec::new();
-                for (&card, &freq) in &freq_map {
-                    if freq == 2 {
-                        pairs.push(card);
-                    } else {
-                        kickers.push(card);
-                    }
-                }
-                pairs.sort_by(|a, b| b.cmp(a));
-                key_cards.extend(pairs);
-            }
-            HandType::HighCard => {
-                kickers.extend(freq_map.keys());
-            }
-        }
-
-        key_cards.sort_by(|a, b| b.cmp(a));
-        kickers.sort_by(|a, b| b.cmp(a));
-
-        (key_cards, kickers)
     }
 }
 
@@ -178,14 +95,29 @@ impl HandType {
             let count = counts.entry(card).or_insert(0);
             *count += 1;
         }
-        let counts = counts.values().sorted().rev().collect::<Vec<_>>();
+
+        // Handle jokers
+        let jokers = counts.remove(&'X').unwrap_or(0);
+
+        // Clone the counts into a new Vec<u32> and then sort
+        let mut counts: Vec<u32> = counts.values().cloned().collect();
+        counts.sort_by(|a, b| b.cmp(a));
+
+        // Add jokers to the most frequent card
+        if !counts.is_empty() {
+            counts[0] += jokers;
+        } else {
+            counts.push(jokers);
+        }
+
+        dbg!(&counts);
         match counts.as_slice() {
-            [1, 1, 1, 1, 1] => HandType::HighCard,
-            [2, 1, 1, 1] => HandType::OnePair,
-            [2, 2, 1] => HandType::TwoPair,
-            [3, 1, 1] => HandType::ThreeOfAKind,
+            [1, ..] => HandType::HighCard,
+            [2, 2, ..] => HandType::TwoPair,
+            [2, ..] => HandType::OnePair,
             [3, 2] => HandType::FullHouse,
-            [4, 1] => HandType::FourOfAKind,
+            [3, ..] => HandType::ThreeOfAKind,
+            [4, ..] => HandType::FourOfAKind,
             [5] => HandType::FiveOfAKind,
             _ => panic!("Invalid hand"),
         }
@@ -220,7 +152,7 @@ fn part_1(filename: &str) -> u32 {
     let input = fs::read_to_string(filename).expect("Something went wrong reading the file");
     let mut hands = input.lines().map(Hand::from_str).collect::<Vec<Hand>>();
 
-    hands.sort_by(|a, b| a.compare(b));
+    hands.sort_by(|a, b| a.cmp(b));
 
     dbg!(&hands);
 
@@ -235,10 +167,29 @@ fn part_1(filename: &str) -> u32 {
         .sum::<u32>()
 }
 
-fn part_2(filename: &str) -> u64 {
+fn part_2(filename: &str) -> u32 {
     let input = fs::read_to_string(filename).expect("Something went wrong reading the file");
+    let mut hands = input
+        .lines()
+        .map(|line| {
+            let replaced = line.replace('J', "X");
+            Hand::from_str(replaced.as_str())
+        })
+        .collect::<Vec<Hand>>();
 
-    todo!();
+    hands.sort_by(|a, b| a.cmp(b));
+
+    dbg!(&hands);
+
+    // Multiply the bid with the hand rank
+    hands
+        .iter()
+        .enumerate()
+        .map(|(i, hand)| {
+            println!("{} * {:?}", i + 1, hand.bid);
+            hand.bid * (i as u32 + 1)
+        })
+        .sum::<u32>()
 }
 
 #[cfg(test)]
@@ -254,6 +205,6 @@ mod tests {
     #[test]
     fn test_part_2() {
         let result = part_2("example.txt");
-        assert_eq!(result, 71503);
+        assert_eq!(result, 5905);
     }
 }
