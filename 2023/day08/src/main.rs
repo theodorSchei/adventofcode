@@ -1,3 +1,4 @@
+use num::integer::lcm;
 use std::{collections::HashMap, fs};
 
 fn main() {
@@ -44,7 +45,7 @@ fn part_1(filename: &str) -> u32 {
     jumps as u32
 }
 
-fn part_2(filename: &str) -> u32 {
+fn part_2(filename: &str) -> u64 {
     let input = fs::read_to_string(filename).expect("Something went wrong reading the file");
 
     let mut lines = input.lines();
@@ -54,7 +55,6 @@ fn part_2(filename: &str) -> u32 {
     let re = regex::Regex::new(r"(\w+) = \((\w+), (\w+)\)").unwrap();
 
     lines.skip(1).for_each(|line| {
-        //AAA = (BBB, CCC)
         let caps = re.captures(line).unwrap();
         let name = caps.get(1).unwrap().as_str();
         let left = caps.get(2).unwrap().as_str();
@@ -62,35 +62,33 @@ fn part_2(filename: &str) -> u32 {
         maps.insert(name, (left, right));
     });
 
-    // Filter for nodes that end with "A"
-    let current_maps: Vec<&str> = maps
+    // Filter for nodes that end with "A".
+    let starts: Vec<&str> = maps
         .keys()
         .filter(|&key| key.ends_with('A'))
         .cloned()
         .collect();
 
-    let direction = directions.iter().cycle();
-    let mut current_maps = current_maps;
-    let jumps = direction
-        .take_while(|&&dir| {
-            if current_maps.iter().all(|&map| map.ends_with('Z')) {
-                return false;
-            }
-            current_maps = current_maps
-                .iter()
-                .map(|&map| {
-                    if dir == 'L' {
-                        maps.get(map).unwrap().0
-                    } else {
-                        maps.get(map).unwrap().1
-                    }
-                })
-                .collect();
-            true
-        })
-        .count();
+    starts
+        .iter()
+        .map(|&start| {
+            // Find the cyce length for each starting node.
+            let mut current = start;
+            for (i, &dir) in directions.iter().cycle().enumerate() {
+                if current.ends_with('Z') {
+                    return i;
+                }
 
-    jumps as u32
+                current = if dir == 'L' {
+                    maps.get(current).unwrap().0
+                } else {
+                    maps.get(current).unwrap().1
+                };
+            }
+            panic!("No cycle found for {}", start);
+        })
+        // Calculate the least common multiple of all cycle lengths.
+        .fold(1, lcm) as u64
 }
 
 #[cfg(test)]
