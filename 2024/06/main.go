@@ -134,6 +134,32 @@ func Part2(lines []string) string {
 	}
 	curDir := North
 
+	spawnRow, spawnCol := curRow, curCol
+
+	// Solve once to find where to place obstructions
+	for !isOnEdge(grid, curRow, curCol) {
+		nextStep := getValue(grid, curRow+curDir.rowOffset, curCol+curDir.colOffset)
+		switch nextStep {
+		case '.', 'X':
+			grid[curRow][curCol] = 'X' // Visited
+			curRow = curRow + curDir.rowOffset
+			curCol = curCol + curDir.colOffset
+		case '#':
+			curDir = nextDir[curDir]
+		}
+	}
+	grid[curRow][curCol] = 'X'
+	visited := 0
+	for row := 0; row < len(grid); row++ {
+		for col := 0; col < len(grid[row]); col++ {
+			if grid[row][col] == 'X' {
+				visited++
+			}
+		}
+	}
+
+	fmt.Println(spawnCol, spawnRow, curCol, curRow)
+
 	numUnsolvable := 0
 
 	for row := 0; row < len(grid); row++ {
@@ -143,13 +169,14 @@ func Part2(lines []string) string {
 				newGridWithObstruction[i] = make([]byte, len(grid[i]))
 				copy(newGridWithObstruction[i], grid[i])
 			}
-			newGridWithObstruction[row][col] = '#'
-			if !isSolvable(newGridWithObstruction, curRow, curCol, curDir) {
-				numUnsolvable++
+			if newGridWithObstruction[row][col] == 'X' {
+				newGridWithObstruction[row][col] = '#'
+				if !isSolvable(newGridWithObstruction, spawnRow, spawnCol, curDir) {
+					numUnsolvable++
+				}
 			}
 		}
 	}
-
 	return strconv.Itoa(numUnsolvable)
 }
 
