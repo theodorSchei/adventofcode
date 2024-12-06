@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -98,7 +100,7 @@ func Part1(lines []string) string {
 }
 
 func isSolvable(grid [][]byte, curRow int, curCol int, curDir DirectionOffset) bool {
-	maxNumberOfSteps := len(grid) * len(grid[0]) * 2
+	maxNumberOfSteps := len(grid) * len(grid[0])
 
 	for n := 0; !isOnEdge(grid, curRow, curCol); n++ {
 		nextStep := getValue(grid, curRow+curDir.rowOffset, curCol+curDir.colOffset)
@@ -123,6 +125,7 @@ func Part2(lines []string) string {
 		grid[i] = []byte(line)
 	}
 
+	// Find starting position
 	curRow, curCol := 0, 0
 	for row := 0; row < len(grid); row++ {
 		for col := 0; col < len(grid[row]); col++ {
@@ -133,15 +136,14 @@ func Part2(lines []string) string {
 		}
 	}
 	curDir := North
-
 	spawnRow, spawnCol := curRow, curCol
 
-	// Solve once to find where to place obstructions
+	// First solve to mark path
 	for !isOnEdge(grid, curRow, curCol) {
 		nextStep := getValue(grid, curRow+curDir.rowOffset, curCol+curDir.colOffset)
 		switch nextStep {
 		case '.', 'X':
-			grid[curRow][curCol] = 'X' // Visited
+			grid[curRow][curCol] = 'X'
 			curRow = curRow + curDir.rowOffset
 			curCol = curCol + curDir.colOffset
 		case '#':
@@ -149,34 +151,71 @@ func Part2(lines []string) string {
 		}
 	}
 	grid[curRow][curCol] = 'X'
-	visited := 0
+
+	// Collect visited positions
+	var visitedPositions [][2]int
 	for row := 0; row < len(grid); row++ {
 		for col := 0; col < len(grid[row]); col++ {
 			if grid[row][col] == 'X' {
-				visited++
+				visitedPositions = append(visitedPositions, [2]int{row, col})
 			}
 		}
 	}
 
-	fmt.Println(spawnCol, spawnRow, curCol, curRow)
+	// Parallel processing
+	numWorkers := runtime.NumCPU()
+	results := make(chan int, numWorkers)
+	var wg sync.WaitGroup
 
-	numUnsolvable := 0
+	positionsPerWorker := len(visitedPositions) / numWorkers
+	if len(visitedPositions)%numWorkers != 0 {
+		positionsPerWorker++
+	}
 
-	for row := 0; row < len(grid); row++ {
-		for col := 0; col < len(grid[row]); col++ {
-			newGridWithObstruction := make([][]byte, len(grid))
+	for worker := 0; worker < numWorkers; worker++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			localUnsolvable := 0
+			start := workerID * positionsPerWorker
+			end := min((workerID+1)*positionsPerWorker, len(visitedPositions))
+
+			// Local grid for this worker
+			workerGrid := make([][]byte, len(grid))
 			for i := range grid {
-				newGridWithObstruction[i] = make([]byte, len(grid[i]))
-				copy(newGridWithObstruction[i], grid[i])
+				workerGrid[i] = make([]byte, len(grid[i]))
 			}
-			if newGridWithObstruction[row][col] == 'X' {
-				newGridWithObstruction[row][col] = '#'
-				if !isSolvable(newGridWithObstruction, spawnRow, spawnCol, curDir) {
-					numUnsolvable++
+
+			for i := start; i < end; i++ {
+				pos := visitedPositions[i]
+				row, col := pos[0], pos[1]
+
+				// Copy grid for this test
+				for i := range grid {
+					copy(workerGrid[i], grid[i])
+				}
+				workerGrid[row][col] = '#'
+
+				if !isSolvable(workerGrid, spawnRow, spawnCol, curDir) {
+					localUnsolvable++
 				}
 			}
-		}
+			results <- localUnsolvable
+		}(worker)
 	}
+
+	// Close results channel after all workers finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Sum up results
+	numUnsolvable := 0
+	for result := range results {
+		numUnsolvable += result
+	}
+
 	return strconv.Itoa(numUnsolvable)
 }
 
