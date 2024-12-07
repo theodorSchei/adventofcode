@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -51,59 +53,73 @@ func generateOperatorCombinations(allowedOperators []byte, length int) [][]byte 
 	return combinations
 }
 
+func processLine(line string, allowedOperators []byte) int {
+	parts := strings.Split(line, ": ")
+	targetResult, _ := strconv.Atoi(parts[0])
+
+	numStrs := strings.Fields(parts[1])
+	numbers := make([]int, len(numStrs))
+	for i, numStr := range numStrs {
+		numbers[i], _ = strconv.Atoi(numStr)
+	}
+
+	operatorCombinations := generateOperatorCombinations(allowedOperators, len(numbers)-1)
+
+	for _, operators := range operatorCombinations {
+		if evaluateExpression(numbers, operators) == targetResult {
+			return targetResult
+		}
+	}
+	return 0
+}
+
 func Part1(lines []string) string {
 	sum := 0
 	allowedOperators := []byte{'+', '*'}
 
 	for _, line := range lines {
-		parts := strings.Split(line, ": ")
-		targetResult, _ := strconv.Atoi(parts[0])
-
-		numStrs := strings.Fields(parts[1])
-		numbers := make([]int, len(numStrs))
-		for i, numStr := range numStrs {
-			numbers[i], _ = strconv.Atoi(numStr)
-		}
-
-		// Generate all possible operator combinations
-		operatorCombinations := generateOperatorCombinations(allowedOperators, len(numbers)-1)
-
-		// Try each combination
-		for _, operators := range operatorCombinations {
-			if evaluateExpression(numbers, operators) == targetResult {
-				sum += targetResult
-				break // Found a valid combination, move to next line
-			}
-		}
+		sum += processLine(line, allowedOperators)
 	}
-
 	return strconv.Itoa(sum)
 }
 
 func Part2(lines []string) string {
-	sum := 0
 	allowedOperators := []byte{'+', '*', '|'}
+	numWorkers := runtime.NumCPU() // Use number of available CPU cores
 
-	for _, line := range lines {
-		parts := strings.Split(line, ": ")
-		targetResult, _ := strconv.Atoi(parts[0])
+	// Create work channels
+	jobs := make(chan string, len(lines))
+	results := make(chan int, len(lines))
 
-		numStrs := strings.Fields(parts[1])
-		numbers := make([]int, len(numStrs))
-		for i, numStr := range numStrs {
-			numbers[i], _ = strconv.Atoi(numStr)
-		}
-
-		// Generate all possible operator combinations
-		operatorCombinations := generateOperatorCombinations(allowedOperators, len(numbers)-1)
-
-		// Try each combination
-		for _, operators := range operatorCombinations {
-			if evaluateExpression(numbers, operators) == targetResult {
-				sum += targetResult
-				break // Found a valid combination, move to next line
+	// Create worker pool
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for line := range jobs {
+				result := processLine(line, allowedOperators)
+				results <- result
 			}
-		}
+		}()
+	}
+
+	// Send jobs
+	for _, line := range lines {
+		jobs <- line
+	}
+	close(jobs)
+
+	// Wait for all workers in separate goroutine
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	sum := 0
+	for result := range results {
+		sum += result
 	}
 
 	return strconv.Itoa(sum)
